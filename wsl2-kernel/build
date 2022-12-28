@@ -1,0 +1,34 @@
+#!/bin/sh
+
+set -e
+
+export WINHOME=$(cmd.exe /C "echo %USERPROFILE%" 2> /dev/null | tr -d '\r')
+export WINHOME_PATH=$(wslpath $WINHOME | tr -d '\r')
+
+echo "------------------------------------------------------------"
+echo "Building patched WSL2 kernel image in docker container"
+echo "------------------------------------------------------------"
+PRJ_URL=https://raw.githubusercontent.com/simple-is-hard/my-setup
+COMMIT=main
+docker build -t wsl-kernel-build $PRJ_URL/$COMMIT/wsl2-kernel/Dockerfile
+
+echo "------------------------------------------------------------"
+echo "Saving patched WSL2 kernel image in $WINHOME_PATH"
+echo "------------------------------------------------------------"
+docker run wsl-kernel-build > $WINHOME_PATH/bzImage.new
+mv $WINHOME_PATH/bzImage.new $WINHOME_PATH/bzImage
+echo $WINHOME_PATH/bzImage
+
+cat <<CONFIG | sed 's/\\/\\\\/g' > $WINHOME_PATH/.wslconfig.new
+[wsl2]
+kernel=$WINHOME\bzImage
+CONFIG
+
+if [ -f $WINHOME_PATH/.wslconfig ]; then
+    echo "WARNING: File .wslconfig already exits"
+    echo "WARNING: Saving to .wslconfig.new, please merge manually"
+    cat $WINHOME_PATH/.wslconfig.new
+else
+    mv $WINHOME_PATH/.wslconfig.new $WINHOME_PATH/.wslconfig
+    echo $WINHOME_PATH/.wslconfig
+fi
