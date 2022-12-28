@@ -1,0 +1,154 @@
+#!/bin/sh
+
+# This likes a shell and needs Linux(kvm) or MacOS(hvf),
+# WSL2 is ok too, might need to manually chmod /dev/kvm.
+# After installed the image might be used with Windows
+# qemu as well(hax), but WSL2 kvm does the trick too.
+
+CD_URL_PATH=https://cdimage.debian.org/debian-cd/current/amd64/iso-cd
+CD_URL_FILE=debian-11.6.0-amd64-netinst.iso
+CD_SUM="e482910626b30f9a7de9b0cc142c3d4a079fbfa96110083be1d0b473671ce08d"
+
+VMLINUZ_SUM="b00b339f8b1aada1841d86650377dd8e7299eaa7f34d0bbf21deb561467015cd"
+INITRD_SUM="2f6452c43d83c05e93472bf0433350ef7c928e39da9acf87d808e418c78c82f8"
+
+HD_MAX_SIZE=32G
+
+mkdir -p .cache
+set -e
+
+echo "------------------------------------------------------------"
+echo "> Creating debian.qcow2 with max size $HD_MAX_SIZE"
+if [ -f debian.qcow2 ]; then
+    echo "debian.qcow2 already exists"
+    echo "press [Enter] to overwrite"
+    echo "or Ctrl+C to stop now"
+    read
+    echo "> Overwriting debian.qcow2"
+fi
+
+qemu-img create -f qcow2 debian.qcow2 $HD_MAX_SIZE
+
+echo ""
+echo "> Pulling install cdrom image"
+if [ -e .cache/$CD_URL_FILE ]; then
+    cache_cd_sum=$(shasum -a256 .cache/$CD_URL_FILE | awk '{print $1}')
+    echo ""
+    echo "> Previosly downloaded cdrom, sha $cache_cd_sum"
+    if [ $CD_SUM != $cache_cd_sum ]; then
+        echo "Unexpected checksum, removing .cache/$CD_URL_FILE"
+        rm .cache/$CD_URL_FILE
+    else
+        echo "Using the cached file"
+    fi
+fi
+
+if [ ! -e .cache/$CD_URL_FILE ]; then
+    echo ""
+    echo "> Downloading from $CD_URL_PATH/$CD_URL_FILE"
+    mkdir -p .cache
+    wget $CD_URL_PATH/$CD_URL_FILE -O .cache/$CD_URL_FILE
+    cache_cd_sum=$(shasum -a256 .cache/$CD_URL_FILE | awk '{print $1}')
+    if [ $CD_SUM != $cache_cd_sum ]; then
+        echo "Unexpected checksum in .cache/$CD_URL_FILE"
+        echo "(expecting $CD_SUM)"
+        exit 1
+    fi
+fi
+
+echo ""
+echo "> Unpacking vmlinuz and initrd"
+if [ -f .cache/vmlinuz ]; then
+    cache_vmlinuz_sum=$(shasum -a256 .cache/vmlinuz | awk '{print $1}')
+    echo "Previosly extracted vmlinuz, sha $cache_vmlinuz_sum"
+    if [ $VMLINUZ_SUM != $cache_vmlinuz_sum ]; then
+        echo "Unexpected checksum, removing .cache/vmlinuz"
+        rm .cache/vmlinuz
+    fi
+fi
+
+if [ -f .cache/initrd.gz ]; then
+    cache_initrd_sum=$(shasum -a256 .cache/initrd.gz | awk '{print $1}')
+    echo "Previosly extracted initrd, sha $cache_initrd_sum"
+    if [ $INITRD_SUM != $cache_initrd_sum ]; then
+        echo "Unexpected checksum, removing .cache/initrd"
+        rm .cache/initrd.gz
+    fi
+fi
+
+if [ ! -f .cache/vmlinuz ]; then
+    7z e -o.cache .cache/$CD_URL_FILE install.amd/vmlinuz > /dev/null
+fi
+
+if [ ! -f .cache/initrd.gz ]; then
+    7z e -o.cache .cache/$CD_URL_FILE install.amd/initrd.gz > /dev/null
+fi
+
+cache_vmlinuz_sum=$(shasum -a256 .cache/vmlinuz | awk '{print $1}')
+if [ $VMLINUZ_SUM != $cache_vmlinuz_sum ]; then
+    echo "Unexpected checksum in .cache/vmlinuz"
+    echo "(expecting $VMLINUZ_SUM)"
+    exit 1
+fi
+
+cache_initrd_sum=$(shasum -a256 .cache/initrd.gz | awk '{print $1}')
+if [ $INITRD_SUM != $cache_initrd_sum ]; then
+    echo "Unexpected checksum in .cache/initrd.gz"
+    echo "(expecting $INITRD_SUM)"
+    exit 1
+fi
+
+echo "OK"
+
+echo ""
+echo "> Staring automated setup in 3 seconds"
+sleep 3
+
+qemu-system-x86_64 \
+	--machine accel=hvf:kvm:hax \
+	-cpu host -m 4096 -smp 2 \
+	\
+	-nic user,hostfwd=tcp::42022-:22 \
+	\
+	-hda debian.qcow2 \
+	-cdrom .cache/$CD_URL_FILE \
+	\
+	-nographic \
+	-vga none \
+	-monitor none \
+	-serial stdio \
+	\
+	-kernel .cache/vmlinuz \
+	-initrd .cache/initrd.gz \
+	\
+	-append '\
+		console=ttyS0,115200 \
+		\
+		language=en \
+		country=JP \
+		locale=en_US.UTF-8 \
+		keymap=us \
+		netcfg/get_hostname=debian \
+		netcfg/get_domain= \
+		passwd/make-user=false \
+		passwd/root-password=root \
+		passwd/root-password-again=root \
+		time/zone=Asia/Tokyo \
+		partman-auto/disk=/dev/sda \
+		partman-auto/method=regular \
+		partman-auto/choose_recipe=atomic \
+		partman/confirm=true \
+		partman/confirm_nooverwrite=true;
+		partman/choose_partition=finish \
+		apt-setup/cdrom/set-first=false \
+		mirror/country=JP \
+		mirror/http/mirror=deb.debian.org \
+		mirror/http/proxy= \
+		popularity-contest/participate=false \
+		tasks=ssh-server,standard \
+		desktop= \
+		grub-installer/bootdev=/dev/sda \
+		finish-install/reboot_in_progress=note \
+		debian-installer/exit/poweroff=true \
+		preseed/late_command="in-target wget https://raw.githubusercontent.com/simple-is-hard/my-setup/main/qemu-vm/vm-provision -O /tmp/vm && in-target sh /tmp/vm" \
+	'

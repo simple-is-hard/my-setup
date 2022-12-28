@@ -1,0 +1,13 @@
+#!/bin/sh
+
+# Add post install changes to the debian VM
+# HOME isn't set when doing in-target, add files to /root
+export HOME=/root
+
+# Allow root login
+echo "PermitRootLogin yes" >> /etc/ssh/sshd_config
+
+apt-get install -y curl
+curl https://raw.githubusercontent.com/simple-is-hard/my-setup/main/qemu-vm/provision-base | sh
+curl https://raw.githubusercontent.com/simple-is-hard/my-setup/main/qemu-vm/provision-docker | sh
+curl https://raw.githubusercontent.com/simple-is-hard/my-setup/main/qemu-vm/provision-mc | sh

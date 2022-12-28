@@ -1,0 +1,57 @@
+#!/bin/sh
+
+sudo apt-get install -y mc patch
+
+echo 'SELECTED_EDITOR="/usr/bin/mcedit"' > ~/.selected_editor
+
+mkdir -p ~/.config/mc
+cd  ~/.config/mc
+if [ ! -f ini ]; then
+echo "[Midnight-Commander]" > ini
+echo "use_internal_edit=true" >> ini
+echo "skin=dark" >> ini
+fi
+
+cd /
+patch -p0 <<MY_MC_PATCH
+diff -urN /usr/share/mc.orig/skins/dark.ini /usr/share/mc/skins/dark.ini
+--- /usr/share/mc.orig/skins/dark.ini	2022-12-31 14:24:07.473700227 +0900
++++ /usr/share/mc/skins/dark.ini	2022-12-08 12:43:52.000000000 +0900
+@@ -128,23 +128,10 @@
+     error = red;lightgray
+ 
+ [widget-panel]
+-    sort-up-char = ↑
+-    sort-down-char = ↓
+-    hiddenfiles-show-char = •
+-    hiddenfiles-hide-char = ○
+-    history-prev-item-char = ←
+-    history-next-item-char = →
+-    history-show-list-char = ↓
+-    filename-scroll-left-char = «
+-    filename-scroll-right-char = »
+-
+-[widget-scollbar]
+-    first-vert-char = ↑
+-    last-vert-char = ↓
+-    first-horiz-char = «
+-    last-horiz-char = »
+-    current-char = ■
+-    background-char = ▒
++    sort-up-char = '
++    sort-down-char = .
++    filename-scroll-left-char = {
++    filename-scroll-right-char = }
+ 
+ [widget-editor]
+     window-state-char = ↕
+diff -urN /usr/share/mc.orig/syntax/yaml.syntax /usr/share/mc/syntax/yaml.syntax
+--- /usr/share/mc.orig/syntax/yaml.syntax	2022-12-31 14:24:07.537700777 +0900
++++ /usr/share/mc/syntax/yaml.syntax	2022-12-31 14:24:51.998067648 +0900
+@@ -37,4 +37,4 @@
+     keyword {{*}} brightred
+ 
+ context exclusive |\[123456789\+\-\s\t\]\n \n- brown
+-context exclusive >\[123456789\+\-\s\t\]\n \n- brown
++#context exclusive >\[123456789\+\-\s\t\]\n \n- brown
+MY_MC_PATCH

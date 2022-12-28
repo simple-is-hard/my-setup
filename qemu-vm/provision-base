@@ -1,0 +1,14 @@
+#!/bin/sh
+
+# Install other packages
+apt-get install -y \
+  cmake \
+  g++ \
+  git \
+  make \
+  mc \
+  sudo \
+  tig \
+  tmux \
+  wget \
+  ;

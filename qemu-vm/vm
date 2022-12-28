@@ -1,0 +1,14 @@
+#!/bin/sh
+
+qemu-system-x86_64 \
+	--machine accel=hvf:kvm:hax \
+	-cpu host -m 4096 -smp 2 \
+	\
+	-nic user,hostfwd=tcp::42022-:22 \
+	\
+	-hda debian.qcow2 \
+	\
+	-nographic \
+	-vga none \
+	-monitor none \
+	-serial stdio
