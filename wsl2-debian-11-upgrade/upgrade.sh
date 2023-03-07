@@ -22,3 +22,7 @@ deb http://deb.debian.org/debian bullseye-updates main
 CONFIG
 
 sudo apt-get update && sudo apt-get -y upgrade && sudo apt -y full-upgrade
+
+# TODO:
+# wsl.exe -u root service docker status || \
+# wsl.exe -u root service docker start
